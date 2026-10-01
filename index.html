@@ -16,7 +16,8 @@
   };
 </script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+<!-- ✅ Paho MQTT oficial (unpkg 1.1.0 — mais confiável que a cdnjs antiga) -->
+<script src="https://unpkg.com/paho-mqtt@1.1.0/paho-mqtt.js"></script>
 
 <style>
   body { font-family: 'Inter', sans-serif; }
@@ -46,13 +47,11 @@
     box-shadow: 0 20px 45px -12px rgba(82, 183, 136, 0.35), 0 8px 20px -8px rgba(27, 67, 50, 0.08);
   }
 
-  /* LED OFF genérico */
   .led-off {
     background: radial-gradient(circle at 35% 30%, #cbd5e1, #94a3b8 70%, #64748b);
     box-shadow: inset 0 4px 12px rgba(0,0,0,0.18);
   }
 
-  /* LED1 — VERMELHO */
   .led1-on {
     background: radial-gradient(circle at 35% 30%, #fecaca, #ef4444 45%, #991b1b 100%);
     box-shadow:
@@ -62,7 +61,6 @@
       inset 0 0 22px rgba(255,255,255,0.6);
   }
 
-  /* LED2 — VERDE */
   .led2-on {
     background: radial-gradient(circle at 35% 30%, #bbf7d0, #22c55e 45%, #14532d 100%);
     box-shadow:
@@ -72,7 +70,6 @@
       inset 0 0 22px rgba(255,255,255,0.6);
   }
 
-  /* LED3 — AZUL */
   .led3-on {
     background: radial-gradient(circle at 35% 30%, #bfdbfe, #3b82f6 45%, #1e3a8a 100%);
     box-shadow:
@@ -82,7 +79,6 @@
       inset 0 0 22px rgba(255,255,255,0.6);
   }
 
-  /* Piscar — genérico */
   .led-blink {
     animation: ledPiscar var(--blink-speed, 600ms) ease-in-out infinite;
   }
@@ -91,7 +87,6 @@
     50%      { filter: brightness(1.25); }
   }
 
-  /* Fade — respiração */
   .led-fade {
     animation: ledFade calc(var(--blink-speed, 800ms) * 3) ease-in-out infinite;
   }
@@ -100,7 +95,6 @@
     50%      { filter: brightness(1.2); }
   }
 
-  /* SOS */
   .led-sos {
     animation: ledSos 3s steps(1, end) infinite;
   }
@@ -164,7 +158,6 @@
     background: #fff; border: 3px solid #52B788; cursor: pointer;
   }
 
-  /* LED menor para 3 no grid */
   .led-circle {
     width: 90px; height: 90px;
     border-radius: 9999px;
@@ -201,7 +194,6 @@
       </p>
     </header>
 
-    <!-- Status -->
     <div class="flex justify-center mb-5">
       <div id="statusPill" class="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-300"
            style="background: rgba(254, 240, 138, 0.55); color: #854d0e;">
@@ -210,7 +202,6 @@
       </div>
     </div>
 
-    <!-- Tópico -->
     <div class="mb-5">
       <label for="topicoInput" class="block text-xs font-semibold uppercase tracking-wider mb-2" style="color:#2D6A4F;">
         Tópico Base MQTT
@@ -223,7 +214,6 @@
       </p>
     </div>
 
-    <!-- Velocidade -->
     <div class="mb-6">
       <div class="flex items-center justify-between mb-2">
         <label for="velocidade" class="text-xs font-semibold uppercase tracking-wider" style="color:#2D6A4F;">
@@ -234,10 +224,8 @@
       <input id="velocidade" type="range" min="100" max="1500" step="50" value="500" class="slider-sorvete" />
     </div>
 
-    <!-- 3 LEDs -->
     <div class="grid grid-cols-3 gap-3 sm:gap-5 my-6">
 
-      <!-- LED 1 — Vermelho -->
       <div class="flex flex-col items-center">
         <div id="led1" class="led-circle led-off">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 sm:w-10 sm:h-10" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
@@ -249,7 +237,6 @@
         <p id="led1Status" class="text-[10px] font-mono mt-1" style="color:#3A4A42; opacity:0.7;">OFF</p>
       </div>
 
-      <!-- LED 2 — Verde -->
       <div class="flex flex-col items-center">
         <div id="led2" class="led-circle led-off">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 sm:w-10 sm:h-10" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
@@ -261,7 +248,6 @@
         <p id="led2Status" class="text-[10px] font-mono mt-1" style="color:#3A4A42; opacity:0.7;">OFF</p>
       </div>
 
-      <!-- LED 3 — Azul -->
       <div class="flex flex-col items-center">
         <div id="led3" class="led-circle led-off">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 sm:w-10 sm:h-10" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
@@ -275,10 +261,8 @@
 
     </div>
 
-    <!-- Controles por LED -->
     <div class="space-y-5">
 
-      <!-- Controles LED 1 -->
       <div class="p-4 rounded-xl" style="background: rgba(254, 226, 226, 0.35); border: 1px solid rgba(252, 165, 165, 0.5);">
         <p class="text-xs font-bold uppercase tracking-wider mb-3" style="color:#7f1d1d;">🔴 LED 1 — Pino 9</p>
         <div class="grid grid-cols-5 gap-2">
@@ -290,7 +274,6 @@
         </div>
       </div>
 
-      <!-- Controles LED 2 -->
       <div class="p-4 rounded-xl" style="background: rgba(220, 252, 231, 0.4); border: 1px solid rgba(134, 239, 172, 0.5);">
         <p class="text-xs font-bold uppercase tracking-wider mb-3" style="color:#14532d;">🟢 LED 2 — Pino 10</p>
         <div class="grid grid-cols-5 gap-2">
@@ -302,7 +285,6 @@
         </div>
       </div>
 
-      <!-- Controles LED 3 -->
       <div class="p-4 rounded-xl" style="background: rgba(219, 234, 254, 0.4); border: 1px solid rgba(147, 197, 253, 0.5);">
         <p class="text-xs font-bold uppercase tracking-wider mb-3" style="color:#1e3a8a;">🔵 LED 3 — Pino 11</p>
         <div class="grid grid-cols-5 gap-2">
@@ -334,6 +316,7 @@ let client = null;
 let topicoBase   = document.getElementById("topicoInput").value.trim();
 let topicoCmd    = topicoBase + "/cmd";
 let topicoStatus = topicoBase + "/status";
+let tentativas   = 0;
 
 /* ELEMENTOS */
 const statusPill  = document.getElementById("statusPill");
@@ -409,41 +392,45 @@ function aplicarEstadoLED(numLed, valor) {
 
 /* CONEXÃO MQTT */
 function conectar() {
-  setStatus("sync", "Sincronizando...");
-  client = new Paho.MQTT.Client(BROKER, PORT, CLIENT_ID);
+  tentativas++;
+  setStatus("sync", "Sincronizando... (tentativa " + tentativas + ")");
+
+  const cid = CLIENT_ID + "_" + tentativas;
+  client = new Paho.MQTT.Client(BROKER, PORT, cid);
 
   client.onConnectionLost = (resp) => {
     setStatus("offline", "Sistema Offline");
-    setTimeout(conectar, 4000);
+    console.warn("❌ Conexão perdida:", resp.errorMessage);
+    setTimeout(conectar, 5000);
   };
 
   client.onMessageArrived = (msg) => {
     const payload = msg.payloadString.trim();
     const topico  = msg.destinationName;
-    console.log(`📩 Recebido [${topico}]: ${payload}`);
-
+    console.log(`📩 [${topico}] → ${payload}`);
     if (topico !== topicoStatus) return;
 
-    /* Formato esperado: "LED1:1", "LED2:BLINK_300", "LED3:FADE_500", etc. */
     const idx = payload.indexOf(":");
     if (idx === -1) return;
-
     const numLed = payload.substring(0, idx).replace("LED", "").trim();
     const valor  = payload.substring(idx + 1).trim();
     aplicarEstadoLED(numLed, valor);
   };
 
+  console.log(`🔌 Conectando em wss://${BROKER}:${PORT} como ${cid}...`);
+
   client.connect({
     useSSL: true,
+    timeout: 10,
     onSuccess: () => {
       setStatus("online", "Sistema Online");
       client.subscribe(topicoStatus);
-      console.log("✅ Conectado. Escutando:", topicoStatus);
+      console.log("✅ Conectado! Escutando:", topicoStatus);
     },
     onFailure: (err) => {
       setStatus("offline", "Falha na Conexão");
-      console.error("Erro MQTT:", err.errMessage || err.errorMessage);
-      setTimeout(conectar, 4000);
+      console.error("❌ Falha MQTT:", err.errorMessage || err);
+      setTimeout(conectar, 5000);
     },
   });
 }
@@ -471,9 +458,12 @@ velocidade.addEventListener("input", () => {
   velocidadeValor.textContent = velocidade.value + " ms";
 });
 
-/* PUBLICAR — sempre no /cmd no formato LEDn:comando */
+/* PUBLICAR */
 function publicar(numLed, cmd) {
-  if (!client || !client.isConnected()) return;
+  if (!client || !client.isConnected()) {
+    console.warn("⚠️ MQTT não conectado ainda.");
+    return;
+  }
   const payload = `LED${numLed}:${cmd}`;
   const msg = new Paho.MQTT.Message(payload);
   msg.destinationName = topicoCmd;
@@ -481,10 +471,17 @@ function publicar(numLed, cmd) {
   console.log(`📤 Enviado [${topicoCmd}]: ${payload}`);
 }
 
-/* BOTÕES — delegação de evento */
 document.querySelectorAll("button[data-led]").forEach(btn => {
   btn.addEventListener("click", () => {
     const numLed = btn.dataset.led;
     const cmd    = btn.dataset.cmd;
     if (cmd === "BLINK") publicar(numLed, "BLINK_" + velocidade.value);
-    else
+    else if (cmd === "FADE") publicar(numLed, "FADE_" + velocidade.value);
+    else publicar(numLed, cmd);
+  });
+});
+
+window.addEventListener("load", conectar);
+</script>
+</body>
+</html>
