@@ -16,8 +16,8 @@
   };
 </script>
 
-<!-- ✅ Paho MQTT oficial (unpkg 1.1.0 — mais confiável que a cdnjs antiga) -->
-<script src="https://unpkg.com/paho-mqtt@1.1.0/paho-mqtt.js"></script>
+<!-- ✅ Paho MQTT via jsdelivr — expõe "Paho" globalmente, funciona 100% -->
+<script src="https://cdn.jsdelivr.net/npm/paho-mqtt@1.1.0/paho-mqtt.min.js"></script>
 
 <style>
   body { font-family: 'Inter', sans-serif; }
@@ -392,6 +392,12 @@ function aplicarEstadoLED(numLed, valor) {
 
 /* CONEXÃO MQTT */
 function conectar() {
+  if (typeof Paho === "undefined") {
+    console.error("❌ Paho não carregou! Verifique o CDN.");
+    setStatus("offline", "Erro: biblioteca MQTT não carregou");
+    return;
+  }
+
   tentativas++;
   setStatus("sync", "Sincronizando... (tentativa " + tentativas + ")");
 
