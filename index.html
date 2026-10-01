@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Central de Iluminação IoT</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: { extend: { fontFamily: { sans: ['Inter', 'Poppins', 'sans-serif'] } } },
+  };
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+
+<style>
+  body { font-family: 'Inter', sans-serif; }
+
+  .bg-sorvete {
+    background: linear-gradient(135deg, #C7F0D8 0%, #D8F3DC 35%, #F6FFFA 100%);
+  }
+
+  .bolha {
+    position: absolute;
+    border-radius: 9999px;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(82,183,136,0.25));
+    filter: blur(1px);
+    opacity: 0.55;
+    animation: flutuar 9s ease-in-out infinite;
+  }
+  @keyframes flutuar {
+    0%,100% { transform: translateY(0) scale(1); }
+    50%     { transform: translateY(-22px) scale(1.08); }
+  }
+
+  .glass {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(167, 243, 208, 0.55);
+    box-shadow: 0 20px 45px -12px rgba(82, 183, 136, 0.35), 0 8px 20px -8px rgba(27, 67, 50, 0.08);
+  }
+
+  .led-off {
+    background: radial-gradient(circle at 35% 30%, #cbd5e1, #94a3b8 70%, #64748b);
+    box-shadow: inset 0 4px 12px rgba(0,0,0,0.18);
+  }
+
+  .led-on {
+    background: radial-gradient(circle at 35% 30%, #a5f3fc, #22d3ee 45%, #2563eb 100%);
+    box-shadow:
+      0 0 25px rgba(34, 211, 238, 0.85),
+      0 0 55px rgba(37, 99, 235, 0.75),
+      0 0 90px rgba(34, 211, 238, 0.5),
+      inset 0 0 22px rgba(255,255,255,0.65);
+  }
+
+  .led-blink {
+    background: radial-gradient(circle at 35% 30%, #a5f3fc, #22d3ee 45%, #2563eb 100%);
+    animation: ledPiscar var(--blink-speed, 600ms) ease-in-out infinite;
+  }
+  @keyframes ledPiscar {
+    0%, 100% {
+      box-shadow: 0 0 15px rgba(34,211,238,0.5), inset 0 0 15px rgba(255,255,255,0.5);
+      filter: brightness(0.55);
+    }
+    50% {
+      box-shadow:
+        0 0 30px rgba(34,211,238,0.95),
+        0 0 65px rgba(37,99,235,0.85),
+        0 0 100px rgba(34,211,238,0.6),
+        inset 0 0 25px rgba(255,255,255,0.85);
+      filter: brightness(1.15);
+    }
+  }
+
+  .led-fade {
+    background: radial-gradient(circle at 35% 30%, #a5f3fc, #22d3ee 45%, #2563eb 100%);
+    animation: ledFade calc(var(--blink-speed, 800ms) * 3) ease-in-out infinite;
+  }
+  @keyframes ledFade {
+    0%, 100% {
+      box-shadow: 0 0 10px rgba(34,211,238,0.3), inset 0 0 10px rgba(255,255,255,0.3);
+      filter: brightness(0.4);
+    }
+    50% {
+      box-shadow: 0 0 40px rgba(34,211,238,1), 0 0 90px rgba(37,99,235,0.8), inset 0 0 30px rgba(255,255,255,0.9);
+      filter: brightness(1.2);
+    }
+  }
+
+  .led-sos {
+    background: radial-gradient(circle at 35% 30%, #fca5a5, #ef4444 45%, #b91c1c 100%);
+    animation: ledSos 3s steps(1, end) infinite;
+  }
+  @keyframes ledSos {
+    0%   { filter: brightness(1.3); box-shadow: 0 0 30px rgba(239,68,68,0.9), inset 0 0 20px rgba(255,255,255,0.7); }
+    15%  { filter: brightness(0.4); box-shadow: none; }
+    30%  { filter: brightness(1.3); box-shadow: 0 0 30px rgba(239,68,68,0.9), inset 0 0 20px rgba(255,255,255,0.7); }
+    45%  { filter: brightness(0.4); box-shadow: none; }
+    60%  { filter: brightness(1.3); box-shadow: 0 0 30px rgba(239,68,68,0.9), inset 0 0 20px rgba(255,255,255,0.7); }
+    75%  { filter: brightness(0.4); box-shadow: none; }
+    100% { filter: brightness(0.4); }
+  }
+
+  .btn { transition: all 250ms ease; }
+  .btn:active:not(:disabled) { transform: scale(0.95); }
+
+  .btn-on    { background: linear-gradient(135deg, #74C69D, #40916C); color: #fff; box-shadow: 0 10px 25px -8px rgba(64, 145, 108, 0.55); }
+  .btn-on:hover:not(:disabled)    { background: linear-gradient(135deg, #52B788, #2D6A4F); }
+  .btn-off   { background: linear-gradient(135deg, #f87171, #dc2626); color: #fff; box-shadow: 0 10px 25px -8px rgba(220, 38, 38, 0.45); }
+  .btn-off:hover:not(:disabled)   { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+  .btn-blink { background: linear-gradient(135deg, #a5f3fc, #0891b2); color: #fff; box-shadow: 0 10px 25px -8px rgba(8, 145, 178, 0.5); }
+  .btn-blink:hover:not(:disabled) { background: linear-gradient(135deg, #67e8f9, #0e7490); }
+  .btn-fade  { background: linear-gradient(135deg, #c4b5fd, #7c3aed); color: #fff; box-shadow: 0 10px 25px -8px rgba(124, 58, 237, 0.5); }
+  .btn-fade:hover:not(:disabled)  { background: linear-gradient(135deg, #a78bfa, #6d28d9); }
+  .btn-sos   { background: linear-gradient(135deg, #fca5a5, #b91c1c); color: #fff; box-shadow: 0 10px 25px -8px rgba(185, 28, 28, 0.5); }
+  .btn-sos:hover:not(:disabled)   { background: linear-gradient(135deg, #f87171, #991b1b); }
+
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(30%); }
+
+  .pulse-dot { animation: pulseDot 1.4s ease-in-out infinite; }
+  @keyframes pulseDot {
+    0%,100% { transform: scale(1); opacity: 1; }
+    50%     { transform: scale(1.35); opacity: 0.55; }
+  }
+
+  .input-sorvete { transition: all 250ms ease; }
+  .input-sorvete:focus {
+    outline: none;
+    border-color: #52B788;
+    box-shadow: 0 0 0 4px rgba(82, 183, 136, 0.2);
+    background: rgba(255,255,255,0.95);
+  }
+
+  input[type="range"].slider-sorvete {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 6px; border-radius: 9999px;
+    background: linear-gradient(90deg, #74C69D, #52B788);
+    outline: none; transition: 200ms;
+  }
+  input[type="range"].slider-sorvete::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 20px; height: 20px; border-radius: 9999px;
+    background: #fff; border: 3px solid #52B788; cursor: pointer;
+    box-shadow: 0 4px 10px rgba(82,183,136,0.5); transition: 200ms;
+  }
+  input[type="range"].slider-sorvete::-webkit-slider-thumb:hover {
+    transform: scale(1.15); border-color: #40916C;
+  }
+  input[type="range"].slider-sorvete::-moz-range-thumb {
+    width: 20px; height: 20px; border-radius: 9999px;
+    background: #fff; border: 3px solid #52B788; cursor: pointer;
+  }
+</style>
+</head>
+
+<body class="bg-sorvete min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-hidden font-sans">
+
+  <div class="bolha w-40 h-40 top-10 left-8"></div>
+  <div class="bolha w-24 h-24 bottom-16 left-1/4" style="animation-delay: 1.2s;"></div>
+  <div class="bolha w-32 h-32 top-1/3 right-10" style="animation-delay: 2s;"></div>
+  <div class="bolha w-20 h-20 bottom-10 right-1/4" style="animation-delay: 0.6s;"></div>
+  <div class="bolha w-16 h-16 top-1/2 left-1/2" style="animation-delay: 2.6s;"></div>
+
+  <main class="glass rounded-2xl w-full max-w-xl p-6 sm:p-9 relative z-10">
+
+    <header class="text-center mb-6">
+      <h1 class="text-2xl sm:text-3xl font-bold tracking-tight" style="color:#1B4332;">
+        Central de Iluminação IoT
+      </h1>
+      <p class="text-sm mt-1 flex items-center justify-center gap-2" style="color:#3A4A42;">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" stroke="#52B788" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/>
+        </svg>
+        Controle de Hardware — Porta 13
+      </p>
+    </header>
+
+    <div class="flex justify-center mb-5">
+      <div id="statusPill" class="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-300"
+           style="background: rgba(254, 240, 138, 0.55); color: #854d0e;">
+        <span id="statusDot" class="pulse-dot w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+        <span id="statusText">Sincronizando...</span>
+      </div>
+    </div>
+
+    <div class="mb-5">
+      <label for="topicoInput" class="block text-xs font-semibold uppercase tracking-wider mb-2" style="color:#2D6A4F;">
+        Tópico Base MQTT
+      </label>
+      <input id="topicoInput" type="text"
+             value="stellar/orbit"
+             class="input-sorvete w-full px-4 py-3 rounded-xl border border-emerald-100 text-sm font-mono"
+             style="background: rgba(255,255,255,0.75); color:#3A4A42;" />
+      <p class="text-[11px] mt-1.5" style="color:#3A4A42; opacity:0.7;">
+        O site criará automaticamente <code>/cmd</code> e <code>/status</code>.
+      </p>
+    </div>
+
+    <div class="mb-6">
+      <div class="flex items-center justify-between mb-2">
+        <label for="velocidade" class="text-xs font-semibold uppercase tracking-wider" style="color:#2D6A4F;">
+          Velocidade do Efeito
+        </label>
+        <span id="velocidadeValor" class="text-xs font-mono font-semibold" style="color:#2D6A4F;">500 ms</span>
+      </div>
+      <input id="velocidade" type="range" min="100" max="1500" step="50" value="500" class="slider-sorvete" />
+    </div>
+
+    <div class="flex flex-col items-center my-6">
+      <div id="led" class="led-off w-36 h-36 sm:w-44 sm:h-44 rounded-full flex items-center justify-center transition-all duration-500"
+           style="--blink-speed: 500ms;">
+        <svg id="ledIcon" xmlns="http://www.w3.org/2000/svg" class="w-12 h-12" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/>
+        </svg>
+      </div>
+      <p id="ledLabel" class="mt-4 text-sm font-medium tracking-wide" style="color:#3A4A42;">
+        Dispositivo Inativo
+      </p>
+      <p id="modoLabel" class="text-[11px] mt-1 font-mono" style="color:#3A4A42; opacity:0.6;">
+        modo: OFF
+      </p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3 mb-3">
+      <button id="btnOn" disabled class="btn btn-on rounded-xl py-3.5 font-semibold text-sm tracking-wide flex items-center justify-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>
+        LIGAR
+      </button>
+      <button id="btnOff" disabled class="btn btn-off rounded-xl py-3.5 font-semibold text-sm tracking-wide flex items-center justify-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64M12 2v10"/></svg>
+        DESLIGAR
+      </button>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3">
+      <button id="btnBlink" disabled class="btn btn-blink rounded-xl py-3 font-semibold text-xs sm:text-sm tracking-wide flex flex-col items-center justify-center gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+        PISCAR
+      </button>
+      <button id="btnFade" disabled class="btn btn-fade rounded-xl py-3 font-semibold text-xs sm:text-sm tracking-wide flex flex-col items-center justify-center gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 3v18M5 8a7 7 0 0 1 14 0M5 16a7 7 0 0 0 14 0"/></svg>
+        FADE
+      </button>
+      <button id="btnSos" disabled class="btn btn-sos rounded-xl py-3 font-semibold text-xs sm:text-sm tracking-wide flex flex-col items-center justify-center gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+        SOS
+      </button>
+    </div>
+
+    <p class="text-center text-[11px] mt-6" style="color:#3A4A42; opacity:0.55;">
+      Broker: broker.hivemq.com • WebSocket SSL 8884
+    </p>
+
+  </main>
+
+<script>
+/* ============================================================
+   CONFIG MQTT
+   ============================================================ */
+const BROKER    = "broker.hivemq.com";
+const PORT      = 8884;
+const CLIENT_ID = "web_" + Math.random().toString(16).substring(2, 10) + "_" + Date.now();
+
+let client = null;
+let topicoBase   = document.getElementById("topicoInput").value.trim();
+let topicoCmd    = topicoBase + "/cmd";
+let topicoStatus = topicoBase + "/status";
+
+/* ELEMENTOS */
+const statusPill  = document.getElementById("statusPill");
+const statusDot   = document.getElementById("statusDot");
+const statusText  = document.getElementById("statusText");
+const led         = document.getElementById("led");
+const ledIcon     = document.getElementById("ledIcon");
+const ledLabel    = document.getElementById("ledLabel");
+const modoLabel   = document.getElementById("modoLabel");
+const btnOn       = document.getElementById("btnOn");
+const btnOff      = document.getElementById("btnOff");
+const btnBlink    = document.getElementById("btnBlink");
+const btnFade     = document.getElementById("btnFade");
+const btnSos      = document.getElementById("btnSos");
+const topicoInput = document.getElementById("topicoInput");
+const velocidade  = document.getElementById("velocidade");
+const velocidadeValor = document.getElementById("velocidadeValor");
+
+const botoes = [btnOn, btnOff, btnBlink, btnFade, btnSos];
+
+/* STATUS */
+function setStatus(tipo, texto) {
+  if (tipo === "sync") {
+    statusPill.style.background = "rgba(254, 240, 138, 0.55)";
+    statusPill.style.color = "#854d0e";
+    statusDot.className = "pulse-dot w-2.5 h-2.5 rounded-full bg-amber-400";
+    statusDot.style.boxShadow = "none";
+    botoes.forEach(b => b.disabled = true);
+  } else if (tipo === "online") {
+    statusPill.style.background = "rgba(167, 243, 208, 0.65)";
+    statusPill.style.color = "#065f46";
+    statusDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500";
+    statusDot.style.boxShadow = "0 0 10px rgba(16,185,129,0.9)";
+    botoes.forEach(b => b.disabled = false);
+  } else if (tipo === "offline") {
+    statusPill.style.background = "rgba(254, 202, 202, 0.65)";
+    statusPill.style.color = "#991b1b";
+    statusDot.className = "w-2.5 h-2.5 rounded-full bg-red-500";
+    statusDot.style.boxShadow = "0 0 10px rgba(239,68,68,0.9)";
+    botoes.forEach(b => b.disabled = true);
+  }
+  statusText.textContent = texto;
+}
+
+/* LED VIRTUAL */
+const classesLED = ["led-off", "led-on", "led-blink", "led-fade", "led-sos"];
+
+function aplicarEstadoLED(valor) {
+  const v = valor.toUpperCase().trim();
+  led.classList.remove(...classesLED);
+  led.style.animation = "";
+
+  if (v === "1" || v === "ON") {
+    led.classList.add("led-on");
+    ledIcon.style.stroke = "rgba(255,255,255,0.95)";
+    ledLabel.textContent = "Dispositivo Ativo";
+    ledLabel.style.color = "#1B4332";
+    ledLabel.style.fontWeight = "600";
+  } else if (v === "0" || v === "OFF") {
+    led.classList.add("led-off");
+    ledIcon.style.stroke = "rgba(255,255,255,0.85)";
+    ledLabel.textContent = "Dispositivo Inativo";
+    ledLabel.style.color = "#3A4A42";
+    ledLabel.style.fontWeight = "500";
+  } else if (v.startsWith("BLINK")) {
+    const ms = v.includes("_") ? v.split("_")[1] : velocidade.value;
+    led.style.setProperty("--blink-speed", ms + "ms");
+    led.classList.add("led-blink");
+    ledIcon.style.stroke = "rgba(255,255,255,0.95)";
+    ledLabel.textContent = "Piscando";
+    ledLabel.style.color = "#0e7490";
+    ledLabel.style.fontWeight = "600";
+  } else if (v.startsWith("FADE")) {
+    const ms = v.includes("_") ? v.split("_")[1] : velocidade.value;
+    led.style.setProperty("--blink-speed", ms + "ms");
+    led.classList.add("led-fade");
+    ledIcon.style.stroke = "rgba(255,255,255,0.95)";
+    ledLabel.textContent = "Efeito Respiração";
+    ledLabel.style.color = "#6d28d9";
+    ledLabel.style.fontWeight = "600";
+  } else if (v === "SOS") {
+    led.classList.add("led-sos");
+    ledIcon.style.stroke = "rgba(255,255,255,0.95)";
+    ledLabel.textContent = "SOS • Emergência";
+    ledLabel.style.color = "#991b1b";
+    ledLabel.style.fontWeight = "600";
+  }
+
+  modoLabel.textContent = "modo: " + v;
+}
+
+/* CONEXÃO */
+function conectar() {
+  setStatus("sync", "Sincronizando...");
+  client = new Paho.MQTT.Client(BROKER, PORT, CLIENT_ID);
+
+  client.onConnectionLost = (resp) => {
+    setStatus("offline", "Sistema Offline");
+    console.warn("Conexão perdida:", resp.errorMessage);
+    setTimeout(conectar, 4000);
+  };
+
+  client.onMessageArrived = (msg) => {
+    const valor  = msg.payloadString.trim();
+    const topico = msg.destinationName;
+    console.log(`📩 Recebido [${topico}]: ${valor}`);
+
+    if (topico === topicoStatus) {
+      aplicarEstadoLED(valor);
+    }
+  };
+
+  client.connect({
+    useSSL: true,
+    onSuccess: () => {
+      setStatus("online", "Sistema Online");
+      client.subscribe(topicoStatus);
+      console.log("✅ Conectado. Escutando:", topicoStatus);
+      console.log("📤 Publicando em:", topicoCmd);
+    },
+    onFailure: (err) => {
+      setStatus("offline", "Falha na Conexão");
+      console.error("Erro MQTT:", err.errorMessage);
+      setTimeout(conectar, 4000);
+    },
+  });
+}
+
+/* TROCA DINÂMICA DE TÓPICO */
+topicoInput.addEventListener("change", () => {
+  const novo = topicoInput.value.trim();
+  if (!novo || novo === topicoBase) return;
+
+  if (client && client.isConnected()) {
+    client.unsubscribe(topicoStatus);
+    topicoBase   = novo;
+    topicoCmd    = topicoBase + "/cmd";
+    topicoStatus = topicoBase + "/status";
+    client.subscribe(topicoStatus);
+    console.log(`🔄 Novo status: ${topicoStatus}`);
+    console.log(`🔄 Novo cmd:    ${topicoCmd}`);
+  } else {
+    topicoBase   = novo;
+    topicoCmd    = topicoBase + "/cmd";
+    topicoStatus = topicoBase + "/status";
+  }
+});
+
+/* SLIDER */
+velocidade.addEventListener("input", () => {
+  velocidadeValor.textContent = velocidade.value + " ms";
+  led.style.setProperty("--blink-speed", velocidade.value + "ms");
+});
+
+/* PUBLICAR — sempre no /cmd */
+function publicar(valor) {
+  if (!client || !client.isConnected()) return;
+  const msg = new Paho.MQTT.Message(valor);
+  msg.destinationName = topicoCmd;
+  client.send(msg);
+  console.log(`📤 Enviado [${topicoCmd}]: ${valor}`);
+}
+
+btnOn.addEventListener("click",    () => publicar("1"));
+btnOff.addEventListener("click",   () => publicar("0"));
+btnBlink.addEventListener("click", () => publicar("BLINK_" + velocidade.value));
+btnFade.addEventListener("click",  () => publicar("FADE_" + velocidade.value));
+btnSos.addEventListener("click",   () => publicar("SOS"));
+
+window.addEventListener("load", conectar);
+</script>
+</body>
+</html>
