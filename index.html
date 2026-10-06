@@ -1,79 +1,240 @@
-import serial
-import serial.tools.list_ports
-import paho.mqtt.client as mqtt
-import time
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Intergalático - Controle IoT</title>
+    <!-- Tailwind CSS para Estilização -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome para Ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js para Gráfico do Potenciômetro -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- MQTT.js para Conexão com o HiveMQ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
 
-# Configurações de Conexão Serial
-# DICA: Altere 'COM3' para a porta onde o seu Arduino está conectado (ex: 'COM4' no Windows ou '/dev/ttyUSB0' no Linux)
-SERIAL_PORT = 'COM3' 
-BAUD_RATE = 115200
+    <style>
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .card-glow {
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.15);
+            border: 1px solid rgba(0, 242, 254, 0.2);
+        }
+        .fader-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #00f2fe;
+            cursor: pointer;
+            box-shadow: 0 0 12px #00f2fe;
+        }
+        .fader-slider::-moz-range-thumb {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #00f2fe;
+            cursor: pointer;
+            box-shadow: 0 0 12px #00f2fe;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-4 md:p-8">
 
-# Configurações do Broker HiveMQ Público
-MQTT_BROKER = "broker.hivemq.com"
-MQTT_PORT = 1883
-TOPIC_POT = "projeto_arduino/potenciometro"
-TOPIC_LED = "projeto_arduino/led"
+    <div class="max-w-5xl mx-auto w-full">
+        <!-- Cabeçalho -->
+        <header class="flex flex-col md:flex-row justify-between items-center mb-8 border-b border-gray-800 pb-4">
+            <div class="flex items-center space-x-3 mb-4 md:mb-0">
+                <i class="fa-solid fa-shuttle-space text-3xl text-cyan-400"></i>
+                <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-600 bg-clip-text text-transparent">
+                    Painel Intergalático IoT
+                </h1>
+            </div>
+            <!-- Status Conexão HiveMQ -->
+            <div class="flex items-center space-x-2 bg-gray-900 px-4 py-2 rounded-full border border-gray-800">
+                <div id="status-indicator" class="w-3 h-3 rounded-full bg-yellow-500 animate-pulse"></div>
+                <span id="status-text" class="text-xs font-semibold text-gray-300">Conectando ao HiveMQ...</span>
+            </div>
+        </header>
 
-def setup_serial():
-    try:
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.1)
-        print(f"[SERIAL] Conectado com sucesso na porta {SERIAL_PORT}")
-        return ser
-    except Exception as e:
-        print(f"[SERIAL ERROR] Não foi possível abrir a porta {SERIAL_PORT}: {e}")
-        print("[SERIAL INFO] Portas disponíveis:")
-        for port in serial.tools.list_ports.comports():
-            print(f" - {port.device}")
-        return None
+        <!-- Grid de Controles -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-# Callbacks do MQTT
-def on_connect(client, userdata, flags, rc):
-    if rc == 0:
-        print("[MQTT] Conectado com sucesso ao HiveMQ Broker!")
-        client.subscribe(TOPIC_LED)
-        print(f"[MQTT] Inscrito no tópico de controle: {TOPIC_LED}")
-    else:
-        print(f"[MQTT ERROR] Falha na conexão. Código: {rc}")
+            <!-- Painel Fader do LED -->
+            <div class="bg-gray-900 p-6 rounded-2xl card-glow flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-semibold flex items-center gap-2">
+                            <i class="fa-regular fa-lightbulb text-yellow-400"></i> Controle do LED
+                        </h2>
+                        <span class="text-xs text-gray-500 font-mono">Topico: intergalatico/led</span>
+                    </div>
 
-def on_message(client, userdata, msg):
-    try:
-        payload = msg.payload.decode('utf-8')
-        print(f"[MQTT RX] Tópico: {msg.topic} -> Valor recebido: {payload}")
-        if ser and ser.is_open:
-            # Envia o comando formatado para o Arduino
-            command = f"LED:{payload}\n"
-            ser.write(command.encode('utf-8'))
-    except Exception as e:
-        print(f"[ERROR] Falha ao processar mensagem MQTT: {e}")
+                    <!-- Indicador Visual do Brilho -->
+                    <div class="flex justify-center my-6">
+                        <div id="led-preview" class="w-24 h-24 rounded-full flex items-center justify-center transition-all duration-300 bg-gray-800 text-gray-600 border border-gray-700">
+                            <i class="fa-solid fa-lightbulb text-4xl"></i>
+                        </div>
+                    </div>
 
-# Inicialização do Cliente MQTT
-client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id="Python_Arduino_Bridge")
-client.on_connect = on_connect
-client.on_message = on_message
+                    <!-- Fader / Slider -->
+                    <div class="space-y-4 my-4">
+                        <div class="flex justify-between text-sm font-semibold">
+                            <span>Intensidade PWM</span>
+                            <span id="fader-val" class="text-cyan-400 font-mono">0 / 255</span>
+                        </div>
+                        <input type="range" id="fader" min="0" max="255" value="0" class="w-full h-3 bg-gray-800 rounded-lg appearance-none cursor-pointer fader-slider outline-none">
+                        <div class="flex justify-between text-xs text-gray-500">
+                            <span>0 (Apagado)</span>
+                            <span>128 (Médio)</span>
+                            <span>255 (Máximo)</span>
+                        </div>
+                    </div>
+                </div>
 
-print("[SYSTEM] Iniciando ponte Serial <-> MQTT...")
-ser = setup_serial()
+                <!-- Botão de Desligar Rápido -->
+                <button onclick="setLedValue(0)" class="mt-4 w-full py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-800/50 rounded-lg text-sm transition">
+                    Desligar LED
+                </button>
+            </div>
 
-try:
-    client.connect(MQTT_BROKER, MQTT_PORT, 60)
-    client.loop_start()
+            <!-- Painel de Leitura Analógica (Potenciômetro) -->
+            <div class="bg-gray-900 p-6 rounded-2xl card-glow flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold flex items-center gap-2">
+                            <i class="fa-solid fa-gauge-high text-cyan-400"></i> Sinal Potenciômetro
+                        </h2>
+                        <span class="text-xs text-gray-500 font-mono">Topico: intergalatico/potenciometro</span>
+                    </div>
 
-    while True:
-        if ser and ser.is_open and ser.in_waiting > 0:
-            try:
-                line = ser.readline().decode('utf-8', errors='ignore').strip()
-                if line.startswith("POT:"):
-                    pot_value = line.split(":")[1]
-                    print(f"[SERIAL RX] Valor Potenciômetro: {pot_value}")
-                    client.publish(TOPIC_POT, pot_value)
-            except Exception as e:
-                print(f"[SERIAL READ ERROR] {e}")
-        time.sleep(0.01)
+                    <!-- Exibição Numérica -->
+                    <div class="flex items-baseline justify-center gap-2 my-4">
+                        <span id="pot-value" class="text-5xl font-extrabold text-cyan-400 font-mono">0</span>
+                        <span class="text-gray-500 font-medium">/ 1023</span>
+                    </div>
 
-except KeyboardInterrupt:
-    print("\n[SYSTEM] Encerrando aplicação...")
-    if ser:
-        ser.close()
-    client.loop_stop()
-    client.disconnect()
-    print("[SYSTEM] Desconectado.")
+                    <!-- Gráfico em Tempo Real -->
+                    <div class="h-44 w-full">
+                        <canvas id="potChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="text-center text-xs text-gray-500 mt-2">
+                    Entrada Analógica A0 do Arduino
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Rodapé -->
+    <footer class="text-center text-xs text-gray-600 mt-8">
+        Painel IoT Intergalático &bull; GitHub Pages + HiveMQ + Python + Arduino
+    </footer>
+
+    <!-- Script Principal MQTT + Gráficos -->
+    <script>
+        // Configurações do MQTT via Websockets para HiveMQ
+        const brokerUrl = 'wss://broker.hivemq.com:8884/mqtt';
+        const topicLed = 'intergalatico/led';
+        const topicPot = 'intergalatico/potenciometro';
+
+        // Elementos da Interface
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        const fader = document.getElementById('fader');
+        const faderVal = document.getElementById('fader-val');
+        const potValueEl = document.getElementById('pot-value');
+        const ledPreview = document.getElementById('led-preview');
+
+        // Configuração do Gráfico Chart.js
+        const ctx = document.getElementById('potChart').getContext('2d');
+        const potChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array(20).fill(''),
+                datasets: [{
+                    label: 'Sinal Analógico',
+                    data: Array(20).fill(0),
+                    borderColor: '#00f2fe',
+                    backgroundColor: 'rgba(0, 242, 254, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { min: 0, max: 1023, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    x: { grid: { display: false } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Conexão MQTT Client
+        const client = mqtt.connect(brokerUrl);
+
+        client.on('connect', () => {
+            statusIndicator.className = "w-3 h-3 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]";
+            statusText.innerText = "Conectado ao HiveMQ";
+            
+            // Inscreve no tópico do potenciômetro
+            client.subscribe(topicPot, (err) => {
+                if (!err) console.log(`Inscrito com sucesso no tópico: ${topicPot}`);
+            });
+        });
+
+        client.on('offline', () => {
+            statusIndicator.className = "w-3 h-3 rounded-full bg-red-500";
+            statusText.innerText = "Desconectado";
+        });
+
+        // Recebimento de mensagens MQTT
+        client.on('message', (topic, message) => {
+            if (topic === topicPot) {
+                const val = parseInt(message.toString());
+                potValueEl.innerText = val;
+
+                // Atualizar dados do gráfico
+                potChart.data.datasets[0].data.shift();
+                potChart.data.datasets[0].data.push(val);
+                potChart.update();
+            }
+        });
+
+        // Envio do Fader para o MQTT
+        function publishLedValue(val) {
+            faderVal.innerText = `${val} / 255`;
+            
+            // Atualizar cor do brilho no preview
+            const opacity = val / 255;
+            ledPreview.style.boxShadow = `0 0 ${val / 5}px rgba(0, 242, 254, ${opacity})`;
+            ledPreview.style.color = opacity > 0.1 ? '#00f2fe' : '#4b5563';
+
+            // Publicar MQTT
+            if (client.connected) {
+                client.publish(topicLed, val.toString());
+            }
+        }
+
+        // Listener de movimento do Fader
+        fader.addEventListener('input', (e) => {
+            publishLedValue(e.target.value);
+        });
+
+        function setLedValue(val) {
+            fader.value = val;
+            publishLedValue(val);
+        }
+    </script>
+</body>
+</html>
